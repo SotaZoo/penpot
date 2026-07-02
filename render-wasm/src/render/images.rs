@@ -64,6 +64,22 @@ pub struct ImageStore {
     context: Box<DirectContext>,
 }
 
+/// A source of CPU-backed images for the vector exporters (SVG/PDF), keyed by
+/// image id. Abstracts [`ImageStore`] so the exporters don't depend on a live
+/// GPU context — production uses `ImageStore`; headless tests inject a CPU-only
+/// fake.
+pub trait ImageProvider {
+    /// Returns a CPU (non-texture) copy of the image with `id`, if present.
+    fn get_cpu_image(&mut self, id: &Uuid) -> Option<Image>;
+}
+
+impl ImageProvider for ImageStore {
+    fn get_cpu_image(&mut self, id: &Uuid) -> Option<Image> {
+        let gpu_image = self.get(id)?.clone();
+        gpu_image.make_non_texture_image(self.context.as_mut())
+    }
+}
+
 /// Creates a Skia image from an existing WebGL texture.
 /// This avoids re-decoding the image, as the browser has already decoded
 /// and uploaded it to the GPU.
@@ -211,11 +227,6 @@ impl ImageStore {
         } else {
             self.get_internal(id, true)
         }
-    }
-
-    pub fn get_cpu_image(&mut self, id: &Uuid) -> Option<Image> {
-        let gpu_image = self.get(id)?.clone();
-        gpu_image.make_non_texture_image(self.context.as_mut())
     }
 
     fn get_internal(&mut self, id: &Uuid, is_thumbnail: bool) -> Option<&Image> {

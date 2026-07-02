@@ -1364,7 +1364,8 @@ impl TextSpan {
     }
 
     pub fn apply_text_transform(&self) -> String {
-        let browser = crate::with_state!(state, { state.current_browser });
+        let browser = crate::globals::export_browser()
+            .unwrap_or_else(|| crate::with_state!(state, { state.current_browser }));
         let text = process_ignored_chars(&self.text, browser);
         match self.text_transform {
             Some(TextTransform::Uppercase) => text.to_uppercase(),

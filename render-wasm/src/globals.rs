@@ -4,8 +4,9 @@ use macros::wasm_error;
 use crate::emscripten::init_gl;
 
 use crate::mem;
-use crate::render::{gpu_state::GpuState, RenderState};
+use crate::render::{gpu_state::GpuState, FontStore, RenderState};
 use crate::state::{State, TextEditorState, UIState};
+use std::cell::Cell;
 
 static mut DESIGN_STATE: *mut State = std::ptr::null_mut();
 
@@ -48,6 +49,54 @@ pub(crate) fn get_text_editor_state() -> &'static mut TextEditorState {
         debug_assert!(!TEXT_EDITOR_STATE.is_null(), "Text Editor state is null");
         &mut *TEXT_EDITOR_STATE
     }
+}
+
+// ---------------------------------------------------------------------------
+// Export font source
+// ---------------------------------------------------------------------------
+//
+// Text shaping (`get_font_collection`, `get_fallback_fonts`,
+// `TextSpan::apply_text_transform`) normally reads the global GPU `RenderState`.
+// The vector exporters (SVG/PDF) run on a GPU-free `ExportState`, and headless
+// tests have no global state at all. `set_export_fonts` installs a thread-local
+// font source (+ browser) for the duration of an export so those helpers can
+// resolve fonts without touching the GPU `RenderState`.
+
+thread_local! {
+    static EXPORT_FONTS: Cell<*const FontStore> = const { Cell::new(std::ptr::null()) };
+    static EXPORT_BROWSER: Cell<u8> = const { Cell::new(0) };
+}
+
+/// RAII guard that clears the export font source when dropped.
+#[must_use]
+pub(crate) struct ExportFontsGuard;
+
+impl Drop for ExportFontsGuard {
+    fn drop(&mut self) {
+        EXPORT_FONTS.with(|c| c.set(std::ptr::null()));
+    }
+}
+
+/// Installs `fonts` (and `browser`) as the export-time text shaping source for
+/// the current thread until the returned guard is dropped.
+pub(crate) fn set_export_fonts(fonts: &FontStore, browser: u8) -> ExportFontsGuard {
+    EXPORT_FONTS.with(|c| c.set(fonts as *const FontStore));
+    EXPORT_BROWSER.with(|c| c.set(browser));
+    ExportFontsGuard
+}
+
+/// Returns the export-time font source, if one is installed.
+pub(crate) fn export_fonts() -> Option<&'static FontStore> {
+    let ptr = EXPORT_FONTS.with(|c| c.get());
+    // Safe within a `set_export_fonts` scope: the pointer outlives every call
+    // made while the guard is alive (same contract as the other globals here).
+    (!ptr.is_null()).then(|| unsafe { &*ptr })
+}
+
+/// Returns the export-time browser, if an export font source is installed.
+pub(crate) fn export_browser() -> Option<u8> {
+    let ptr = EXPORT_FONTS.with(|c| c.get());
+    (!ptr.is_null()).then(|| EXPORT_BROWSER.with(|c| c.get()))
 }
 
 /// UI State

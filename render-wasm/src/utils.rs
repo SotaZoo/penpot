@@ -30,10 +30,16 @@ pub fn get_image(image_id: &Uuid) -> Option<&Image> {
 
 // FIXME: move to a different place ?
 pub fn get_fallback_fonts() -> &'static HashSet<String> {
+    if let Some(fonts) = crate::globals::export_fonts() {
+        return fonts.get_fallback();
+    }
     get_render_state().fonts().get_fallback()
 }
 
 pub fn get_font_collection() -> &'static FontCollection {
+    if let Some(fonts) = crate::globals::export_fonts() {
+        return fonts.font_collection();
+    }
     with_state!(state, { state.font_collection() })
 }
 

@@ -22,9 +22,11 @@ path = "src/main.rs"
 [dependencies]
 base64 = "0.22.1"
 bezier-rs = "0.4.0"
+cargo-insta = "1.48.0"
 gl = "0.14.0"
 glam = "0.24.2"
 indexmap = "2.7.1"
+insta = "1"
 macros = { path = "macros" }
 skia-safe = { version = "0.93.1", default-features = false, features = [
   "gl",
@@ -36,6 +38,9 @@ skia-safe = { version = "0.93.1", default-features = false, features = [
 ] }
 thiserror = "2.0.18"
 uuid = { version = "1.11.0", features = ["v4", "js"] }
+
+[dev-dependencies]
+insta = "1"
 
 [profile.release]
 opt-level = 3

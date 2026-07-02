@@ -131,6 +131,109 @@ impl FontStore {
     pub fn get_emoji_font(&self, _size: f32) -> Option<Font> {
         None
     }
+
+    /// Builds `@font-face` CSS rules with base64-embedded font data for the
+    /// given registered aliases. Used by the SVG export to embed fonts so the
+    /// document renders faithfully without relying on the viewer having the
+    /// fonts installed (SVG, unlike PDF, does not embed fonts on its own).
+    ///
+    /// The `font-family` in each rule is the typeface's own embedded family
+    /// name (which is what Skia's SVG backend writes on `<text>` elements),
+    /// deduplicated by family/weight/style.
+    pub fn font_face_css_for_aliases(&self, aliases: &HashSet<String>) -> String {
+        use base64::Engine as _;
+
+        let mut seen: HashSet<String> = HashSet::new();
+        let mut css = String::new();
+
+        for alias in aliases {
+            let Some(typeface) = self
+                .font_provider
+                .match_family_style(alias, skia::FontStyle::default())
+            else {
+                continue;
+            };
+
+            let family = typeface.family_name();
+            let style = typeface.font_style();
+
+            // Skia's SVG backend derives `<text>` font descriptors from the
+            // typeface's own `SkFontStyle` using a quirky bucketed table (see
+            // `skia_svg_font_weight`). We must mirror it exactly here so each
+            // `@font-face` pairs with the `<text>` elements that reference it;
+            // otherwise, when several weights of the same family coexist, the
+            // browser cannot match the weight and silently falls back to 400.
+            let weight = skia_svg_font_weight(*style.weight());
+            let slant = match style.slant() {
+                skia::font_style::Slant::Italic => "italic",
+                skia::font_style::Slant::Oblique => "oblique",
+                _ => "normal",
+            };
+            let stretch = skia_svg_font_stretch(*style.width());
+
+            let dedup_key = format!("{family}|{weight}|{slant}|{stretch:?}");
+            if !seen.insert(dedup_key) {
+                continue;
+            }
+
+            let Some((data, _index)) = typeface.to_font_data() else {
+                continue;
+            };
+
+            let format = if data.len() >= 4 && &data[0..4] == b"OTTO" {
+                "opentype"
+            } else {
+                "truetype"
+            };
+
+            let stretch_decl = stretch
+                .map(|s| format!("font-stretch:{s};"))
+                .unwrap_or_default();
+            let encoded = base64::engine::general_purpose::STANDARD.encode(&data);
+            css.push_str(&format!(
+                "@font-face{{font-family:\"{family}\";font-style:{slant};font-weight:{weight};{stretch_decl}src:url(data:font/ttf;base64,{encoded}) format(\"{format}\");}}",
+            ));
+        }
+
+        css
+    }
+}
+
+/// Reproduces the `font-weight` string that `SkSVGDevice::addTextAttributes`
+/// writes on `<text>` elements for a given typeface weight. Skia buckets the
+/// weight with `(clamp(w,100,900) - 50) / 100` and indexes a fixed table; note
+/// this collapses 400/500 to "400" and shifts 600->"500", 700->"600", etc.
+/// The `@font-face` selectors must use this exact value to pair with the text.
+fn skia_svg_font_weight(weight: i32) -> &'static str {
+    // Skia's table is ["100","200","300","normal","400","500","600","bold",
+    // "800","900"]; we substitute "400" for the omitted-normal bucket so the
+    // descriptor still resolves to weight 400.
+    const WEIGHTS: [&str; 10] = [
+        "100", "200", "300", "400", "400", "500", "600", "bold", "800", "900",
+    ];
+    let index = ((weight.clamp(100, 900) - 50) / 100) as usize;
+    WEIGHTS[index]
+}
+
+/// Reproduces the `font-stretch` value `SkSVGDevice` writes for a typeface
+/// width, returning `None` for the normal width (which Skia omits).
+fn skia_svg_font_stretch(width: i32) -> Option<&'static str> {
+    const STRETCHES: [&str; 9] = [
+        "ultra-condensed",
+        "extra-condensed",
+        "condensed",
+        "semi-condensed",
+        "normal",
+        "semi-expanded",
+        "expanded",
+        "extra-expanded",
+        "ultra-expanded",
+    ];
+    let index = width - 1;
+    if index == 4 {
+        return None;
+    }
+    STRETCHES.get(usize::try_from(index).ok()?).copied()
 }
 
 fn load_default_provider(font_mgr: &FontMgr) -> skia::textlayout::TypefaceFontProvider {
