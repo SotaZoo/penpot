@@ -135,8 +135,22 @@ export class PluginBridge {
             this.connectedClients.set(ws, connection);
             if (userToken) {
                 // ensure only one connection per userToken
+                const existingConnection = this.clientsByToken.get(userToken);
+                if (existingConnection) {
+                    if (this.canReplaceDuplicateConnection(existingConnection)) {
+                        this.logger.warn("Replacing stale duplicate connection for given user token");
+                        existingConnection.socket.close(1000, "Replaced by a newer plugin connection.");
+                        this.removeConnection(existingConnection.socket);
+                    } else {
+                        this.logger.warn("Duplicate connection for given user token; rejecting new connection");
+                        this.removeConnection(ws);
+                        ws.close(1008, "Duplicate connection for given user token; close previous connection first.");
+                        return;
+                    }
+                }
+
                 if (this.clientsByToken.has(userToken)) {
-                    this.logger.warn("Duplicate connection for given user token; rejecting new connection");
+                    this.logger.warn("Duplicate connection for given user token remained after replacement attempt");
                     this.removeConnection(ws);
                     ws.close(1008, "Duplicate connection for given user token; close previous connection first.");
                     return;
@@ -190,6 +204,16 @@ export class PluginBridge {
         });
 
         this.logger.info("WebSocket mcpServer started on port %d", this.port);
+    }
+
+    private canReplaceDuplicateConnection(connection: ClientConnection): boolean {
+        if (connection.socket.readyState !== WebSocket.OPEN) {
+            return true;
+        }
+        if (connection.frozen) {
+            return true;
+        }
+        return Date.now() - connection.lastHeartbeat > HEARTBEAT_STALE_THRESHOLD_MS;
     }
 
     /**
