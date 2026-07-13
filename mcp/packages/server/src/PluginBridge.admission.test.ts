@@ -83,8 +83,9 @@ test("rejects a healthy duplicate token connection", async () => {
     await waitForOpen(first);
 
     const second = new WebSocket(`ws://127.0.0.1:${port}/mcp/ws?userToken=token-2`);
+    const secondClose = waitForClose(second);
     await waitForOpen(second);
-    const close = await waitForClose(second);
+    const close = await secondClose;
 
     try {
         assert.equal(close.code, 1008);
