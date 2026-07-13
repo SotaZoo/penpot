@@ -66,6 +66,7 @@
       "justifyContent",
       "justifyItems",
       "leftPadding",
+      "paddingType",
       "remove",
       "rightPadding",
       "rowGap",
@@ -149,8 +150,10 @@
       "name",
       "pages",
       "revn",
-      "saveVersion"
+      "saveVersion",
+      "validate"
     ],
+    "FileValidationError": ["code", "hint", "pageId", "shapeId"],
     "FileVersion": [
       "createdAt",
       "createdBy",
@@ -252,6 +255,7 @@
       "horizontalMargin",
       "horizontalSizing",
       "leftMargin",
+      "marginType",
       "maxHeight",
       "maxWidth",
       "minHeight",
@@ -350,6 +354,7 @@
       "getShapeById",
       "id",
       "name",
+      "remove",
       "removeCommentThread",
       "removeFlow",
       "removeRulerGuide",
@@ -371,7 +376,7 @@
     "PreviousScreen": ["type"],
     "Push": ["direction", "duration", "easing", "type"],
     "Rectangle": ["fills", "type"],
-    "RulerGuide": ["board", "orientation", "position"],
+    "RulerGuide": ["board", "orientation", "position", "remove"],
     "Shadow": [
       "blur",
       "color",
@@ -436,6 +441,7 @@
       "proportionLock",
       "remove",
       "removeInteraction",
+      "resetOverrides",
       "resize",
       "rotate",
       "rotation",
@@ -1104,6 +1110,12 @@
         "type": null,
         "array": false
       },
+      "resetOverrides": {
+        "decl": "ShapeBase",
+        "kind": "method",
+        "type": null,
+        "array": false
+      },
       "switchVariant": {
         "decl": "ShapeBase",
         "kind": "method",
@@ -1598,6 +1610,12 @@
         "type": null,
         "array": false
       },
+      "resetOverrides": {
+        "decl": "ShapeBase",
+        "kind": "method",
+        "type": null,
+        "array": false
+      },
       "switchVariant": {
         "decl": "ShapeBase",
         "kind": "method",
@@ -2011,6 +2029,12 @@
         "array": false
       },
       "leftPadding": {
+        "decl": "CommonLayout",
+        "kind": "getset",
+        "type": null,
+        "array": false
+      },
+      "paddingType": {
         "decl": "CommonLayout",
         "kind": "getset",
         "type": null,
@@ -2718,6 +2742,12 @@
         "type": null,
         "array": false
       },
+      "resetOverrides": {
+        "decl": "ShapeBase",
+        "kind": "method",
+        "type": null,
+        "array": false
+      },
       "switchVariant": {
         "decl": "ShapeBase",
         "kind": "method",
@@ -2964,6 +2994,12 @@
         "type": "FileVersion",
         "array": false
       },
+      "validate": {
+        "decl": "File",
+        "kind": "method",
+        "type": "FileValidationError",
+        "array": true
+      },
       "getPluginData": {
         "decl": "PluginData",
         "kind": "method",
@@ -2999,6 +3035,32 @@
         "kind": "method",
         "type": null,
         "array": true
+      }
+    },
+    "FileValidationError": {
+      "code": {
+        "decl": "FileValidationError",
+        "kind": "get",
+        "type": null,
+        "array": false
+      },
+      "hint": {
+        "decl": "FileValidationError",
+        "kind": "get",
+        "type": null,
+        "array": false
+      },
+      "shapeId": {
+        "decl": "FileValidationError",
+        "kind": "get",
+        "type": null,
+        "array": false
+      },
+      "pageId": {
+        "decl": "FileValidationError",
+        "kind": "get",
+        "type": null,
+        "array": false
       }
     },
     "FileVersion": {
@@ -3183,6 +3245,12 @@
         "array": false
       },
       "leftPadding": {
+        "decl": "CommonLayout",
+        "kind": "getset",
+        "type": null,
+        "array": false
+      },
+      "paddingType": {
         "decl": "CommonLayout",
         "kind": "getset",
         "type": null,
@@ -3531,6 +3599,12 @@
         "array": false
       },
       "leftPadding": {
+        "decl": "CommonLayout",
+        "kind": "getset",
+        "type": null,
+        "array": false
+      },
+      "paddingType": {
         "decl": "CommonLayout",
         "kind": "getset",
         "type": null,
@@ -3905,6 +3979,12 @@
         "array": false
       },
       "swapComponent": {
+        "decl": "ShapeBase",
+        "kind": "method",
+        "type": null,
+        "array": false
+      },
+      "resetOverrides": {
         "decl": "ShapeBase",
         "kind": "method",
         "type": null,
@@ -4488,6 +4568,12 @@
         "type": null,
         "array": false
       },
+      "resetOverrides": {
+        "decl": "ShapeBase",
+        "kind": "method",
+        "type": null,
+        "array": false
+      },
       "switchVariant": {
         "decl": "ShapeBase",
         "kind": "method",
@@ -4797,6 +4883,12 @@
         "array": false
       },
       "leftMargin": {
+        "decl": "LayoutChildProperties",
+        "kind": "getset",
+        "type": null,
+        "array": false
+      },
+      "marginType": {
         "decl": "LayoutChildProperties",
         "kind": "getset",
         "type": null,
@@ -5658,6 +5750,12 @@
         "type": "Shape",
         "array": false
       },
+      "remove": {
+        "decl": "Page",
+        "kind": "method",
+        "type": null,
+        "array": false
+      },
       "getShapeById": {
         "decl": "Page",
         "kind": "method",
@@ -6093,6 +6191,12 @@
         "array": false
       },
       "swapComponent": {
+        "decl": "ShapeBase",
+        "kind": "method",
+        "type": null,
+        "array": false
+      },
+      "resetOverrides": {
         "decl": "ShapeBase",
         "kind": "method",
         "type": null,
@@ -6922,6 +7026,12 @@
         "type": null,
         "array": false
       },
+      "resetOverrides": {
+        "decl": "ShapeBase",
+        "kind": "method",
+        "type": null,
+        "array": false
+      },
       "switchVariant": {
         "decl": "ShapeBase",
         "kind": "method",
@@ -7072,6 +7182,12 @@
         "decl": "RulerGuide",
         "kind": "getset",
         "type": "Board",
+        "array": false
+      },
+      "remove": {
+        "decl": "RulerGuide",
+        "kind": "method",
+        "type": null,
         "array": false
       }
     },
@@ -7433,6 +7549,12 @@
         "array": false
       },
       "swapComponent": {
+        "decl": "ShapeBase",
+        "kind": "method",
+        "type": null,
+        "array": false
+      },
+      "resetOverrides": {
         "decl": "ShapeBase",
         "kind": "method",
         "type": null,
@@ -7985,6 +8107,12 @@
         "array": false
       },
       "swapComponent": {
+        "decl": "ShapeBase",
+        "kind": "method",
+        "type": null,
+        "array": false
+      },
+      "resetOverrides": {
         "decl": "ShapeBase",
         "kind": "method",
         "type": null,
@@ -8545,6 +8673,12 @@
         "array": false
       },
       "swapComponent": {
+        "decl": "ShapeBase",
+        "kind": "method",
+        "type": null,
+        "array": false
+      },
+      "resetOverrides": {
         "decl": "ShapeBase",
         "kind": "method",
         "type": null,
@@ -10837,6 +10971,12 @@
         "array": false
       },
       "swapComponent": {
+        "decl": "ShapeBase",
+        "kind": "method",
+        "type": null,
+        "array": false
+      },
+      "resetOverrides": {
         "decl": "ShapeBase",
         "kind": "method",
         "type": null,

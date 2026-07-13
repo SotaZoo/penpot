@@ -1,8 +1,26 @@
 # AI AGENT GUIDE
 
-## SotaZoo fork context
+## SotaZoo fork
 
-If this checkout is from `SotaZoo/penpot`, read `SOTAZOO.md` before changing MCP, self-hosting, Docker image, or branch workflow decisions.
+- `origin` tracks upstream `penpot/penpot`; never push SotaZoo changes there.
+- `sotazoo/develop` is the canonical SotaZoo integration branch: sync upstream
+  `develop`, then merge accepted SotaZoo customizations.
+- Keep live deployments on a version-matched stable release branch. Never mix
+  an MCP image from `develop` with frontend/plugin images from a release tag.
+
+## Hard rules (always apply — no exceptions)
+
+- **Never `git push`, force-push, or modify `git origin`.** For the SotaZoo fork,
+  push only to the existing `sotazoo` remote and only when the user explicitly
+  requests it. Do not change remote URLs or switch SSH↔HTTPS.
+- **Never amend a commit that has been pushed** unless the user explicitly asks.
+  If the user pushes, treat that commit as final from the agent's side.
+- **Read the workflow memory BEFORE the corresponding action**:
+  - Before `git commit` → `mem:workflow/creating-commits` (commit format, AI-assisted-by trailer)
+  - Before `gh issue create` → `mem:workflow/creating-issues` (title derivation, body template, Issue Type)
+  - Before `gh pr create` / `gh pr edit` → `mem:workflow/creating-prs` (title format, body structure, AI note)
+  Don't infer format from the title of a previous commit/issue/PR — the memory
+  is the source of truth.
 
 ## CRITICAL: Read module memories BEFORE writing any code
 
