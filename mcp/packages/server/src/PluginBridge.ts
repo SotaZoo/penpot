@@ -135,8 +135,22 @@ export class PluginBridge {
             this.connectedClients.set(ws, connection);
             if (userToken) {
                 // ensure only one connection per userToken
+                const existingConnection = this.clientsByToken.get(userToken);
+                if (existingConnection) {
+                    if (this.canReplaceDuplicateConnection(existingConnection)) {
+                        this.logger.warn("Replacing stale duplicate connection for given user token");
+                        existingConnection.socket.close(1000, "Replaced by a newer plugin connection.");
+                        this.removeConnection(existingConnection.socket, true);
+                    } else {
+                        this.logger.warn("Duplicate connection for given user token; rejecting new connection");
+                        this.removeConnection(ws);
+                        ws.close(1008, "Duplicate connection for given user token; close previous connection first.");
+                        return;
+                    }
+                }
+
                 if (this.clientsByToken.has(userToken)) {
-                    this.logger.warn("Duplicate connection for given user token; rejecting new connection");
+                    this.logger.warn("Duplicate connection for given user token remained after replacement attempt");
                     this.removeConnection(ws);
                     ws.close(1008, "Duplicate connection for given user token; close previous connection first.");
                     return;
@@ -192,6 +206,16 @@ export class PluginBridge {
         this.logger.info("WebSocket mcpServer started on port %d", this.port);
     }
 
+    private canReplaceDuplicateConnection(connection: ClientConnection): boolean {
+        if (connection.socket.readyState !== WebSocket.OPEN) {
+            return true;
+        }
+        if (connection.frozen) {
+            return true;
+        }
+        return Date.now() - connection.lastHeartbeat > HEARTBEAT_STALE_THRESHOLD_MS;
+    }
+
     /**
      * Removes a client connection and releases all resources associated with it.
      *
@@ -200,8 +224,9 @@ export class PluginBridge {
      * socket that is not (or no longer) registered.
      *
      * @param ws - The WebSocket whose connection state should be removed
+     * @param preserveTokenSubscription - Whether a replacement connection will reuse the token subscription
      */
-    private removeConnection(ws: WebSocket): void {
+    private removeConnection(ws: WebSocket, preserveTokenSubscription: boolean = false): void {
         const connection = this.connectedClients.get(ws);
         if (!connection) {
             return;
@@ -211,7 +236,7 @@ export class PluginBridge {
         if (connection.userToken) {
             this.clientsByToken.delete(connection.userToken);
 
-            if (this.redisBridge) {
+            if (this.redisBridge && !preserveTokenSubscription) {
                 this.redisBridge
                     .unsubscribeFromTasks(connection.userToken)
                     .catch((error) => this.logger.error(error, "Failed to unsubscribe from Redis task channel"));
