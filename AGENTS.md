@@ -1,5 +1,9 @@
 # AI AGENT GUIDE
 
+## SotaZoo fork context
+
+If this checkout is from `SotaZoo/penpot`, read `SOTAZOO.md` before changing MCP, self-hosting, Docker image, or branch workflow decisions.
+
 ## CRITICAL: Read module memories BEFORE writing any code
 
 Do this **before planning, before coding, before touching any file**:
