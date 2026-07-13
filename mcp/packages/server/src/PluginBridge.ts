@@ -140,7 +140,7 @@ export class PluginBridge {
                     if (this.canReplaceDuplicateConnection(existingConnection)) {
                         this.logger.warn("Replacing stale duplicate connection for given user token");
                         existingConnection.socket.close(1000, "Replaced by a newer plugin connection.");
-                        this.removeConnection(existingConnection.socket);
+                        this.removeConnection(existingConnection.socket, true);
                     } else {
                         this.logger.warn("Duplicate connection for given user token; rejecting new connection");
                         this.removeConnection(ws);
@@ -224,8 +224,9 @@ export class PluginBridge {
      * socket that is not (or no longer) registered.
      *
      * @param ws - The WebSocket whose connection state should be removed
+     * @param preserveTokenSubscription - Whether a replacement connection will reuse the token subscription
      */
-    private removeConnection(ws: WebSocket): void {
+    private removeConnection(ws: WebSocket, preserveTokenSubscription: boolean = false): void {
         const connection = this.connectedClients.get(ws);
         if (!connection) {
             return;
@@ -235,7 +236,7 @@ export class PluginBridge {
         if (connection.userToken) {
             this.clientsByToken.delete(connection.userToken);
 
-            if (this.redisBridge) {
+            if (this.redisBridge && !preserveTokenSubscription) {
                 this.redisBridge
                     .unsubscribeFromTasks(connection.userToken)
                     .catch((error) => this.logger.error(error, "Failed to unsubscribe from Redis task channel"));

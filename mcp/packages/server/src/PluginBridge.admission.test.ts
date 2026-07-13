@@ -20,6 +20,16 @@ function delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function waitForCondition(condition: () => boolean, timeoutMs: number = 1_000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (!condition()) {
+        if (Date.now() >= deadline) {
+            throw new Error("Timed out waiting for condition");
+        }
+        await delay(5);
+    }
+}
+
 async function closeBridge(bridge: PluginBridge): Promise<void> {
     const internals = bridge as any;
     for (const connection of internals.connectedClients.values()) {
@@ -42,11 +52,13 @@ test("replaces a frozen duplicate token connection with the new plugin connectio
     const first = new WebSocket(`ws://127.0.0.1:${port}/mcp/ws?userToken=token-1`);
     await waitForOpen(first);
     first.send(JSON.stringify({ type: "freeze" }));
-    await delay(25);
+    const connection = (bridge as any).clientsByToken.get("token-1");
+    await waitForCondition(() => connection.frozen);
 
+    const firstClose = waitForClose(first);
     const second = new WebSocket(`ws://127.0.0.1:${port}/mcp/ws?userToken=token-1`);
     await waitForOpen(second);
-    await delay(25);
+    await firstClose;
 
     try {
         assert.equal(second.readyState, WebSocket.OPEN);
@@ -99,13 +111,55 @@ test("replaces a heartbeat-stale duplicate token connection with the new plugin 
     const connection = (bridge as any).clientsByToken.get("token-3");
     connection.lastHeartbeat = Date.now() - (HEARTBEAT_STALE_THRESHOLD_MS + 1_000);
 
+    const firstClose = waitForClose(first);
     const second = new WebSocket(`ws://127.0.0.1:${port}/mcp/ws?userToken=token-3`);
     await waitForOpen(second);
-    await delay(25);
+    await firstClose;
 
     try {
         assert.equal(second.readyState, WebSocket.OPEN);
         assert.notEqual(first.readyState, WebSocket.OPEN);
+    } finally {
+        first.close();
+        second.close();
+        await closeBridge(bridge);
+    }
+});
+
+test("preserves the Redis token subscription while replacing a stale connection", async () => {
+    const subscriptions: string[] = [];
+    const unsubscriptions: string[] = [];
+    const redisBridge = {
+        subscribeToTasks: async (userToken: string) => {
+            subscriptions.push(userToken);
+        },
+        unsubscribeFromTasks: async (userToken: string) => {
+            unsubscriptions.push(userToken);
+        },
+    } as any;
+    const mcpServer = {
+        isMultiUserMode: () => true,
+        getSessionContext: () => ({ userToken: "token-4" }),
+    } as any;
+
+    const bridge = new PluginBridge(mcpServer, 0, redisBridge);
+    const port = ((bridge as any).wsServer.address() as { port: number }).port;
+
+    const first = new WebSocket(`ws://127.0.0.1:${port}/mcp/ws?userToken=token-4`);
+    await waitForOpen(first);
+    await waitForCondition(() => subscriptions.length === 1);
+    const connection = (bridge as any).clientsByToken.get("token-4");
+    connection.frozen = true;
+
+    const firstClose = waitForClose(first);
+    const second = new WebSocket(`ws://127.0.0.1:${port}/mcp/ws?userToken=token-4`);
+    await waitForOpen(second);
+    await firstClose;
+    await waitForCondition(() => subscriptions.length === 2);
+
+    try {
+        assert.equal(second.readyState, WebSocket.OPEN);
+        assert.deepEqual(unsubscriptions, []);
     } finally {
         first.close();
         second.close();

@@ -10,9 +10,9 @@
 
 ## Hard rules (always apply — no exceptions)
 
-- **Never `git push`, force-push, or modify `git origin`.** For the SotaZoo fork,
-  push only to the existing `sotazoo` remote and only when the user explicitly
-  requests it. Do not change remote URLs or switch SSH↔HTTPS.
+- **Never push to or modify `git origin`, and never force-push.** For the SotaZoo
+  fork, push only to the existing `sotazoo` remote and only when the user
+  explicitly requests it. Do not change remote URLs or switch SSH↔HTTPS.
 - **Never amend a commit that has been pushed** unless the user explicitly asks.
   If the user pushes, treat that commit as final from the agent's side.
 - **Read the workflow memory BEFORE the corresponding action**:
