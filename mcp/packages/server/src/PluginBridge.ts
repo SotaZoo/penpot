@@ -9,10 +9,45 @@ import type { RedisBridge } from "./RedisBridge";
 
 const KEEP_ALIVE_TIME = 30000; // 30 seconds
 
-interface ClientConnection {
+/**
+ * Maximum plugin heartbeat age before a connection is stale.
+ *
+ * Browser WebSocket pongs do not prove that the plugin's JavaScript event loop can run tasks.
+ */
+export const HEARTBEAT_STALE_THRESHOLD_MS = 30000;
+
+export interface PluginLivenessState {
+    lastHeartbeat: number;
+    frozen: boolean;
+}
+
+interface ClientConnection extends PluginLivenessState {
     socket: WebSocket;
     userToken: string | null;
     pingInterval: NodeJS.Timeout;
+}
+
+/** Rejects task dispatch when an open socket belongs to a frozen or suspended plugin tab. */
+export function assertPluginResponsive(
+    state: PluginLivenessState,
+    now: number,
+    staleThresholdMs: number = HEARTBEAT_STALE_THRESHOLD_MS
+): void {
+    if (state.frozen) {
+        throw new Error(
+            `The Penpot plugin tab has been frozen by the browser and cannot run tasks. ` +
+                `Please click/focus the Penpot tab to wake it, then retry.`
+        );
+    }
+
+    const heartbeatAge = now - state.lastHeartbeat;
+    if (heartbeatAge > staleThresholdMs) {
+        throw new Error(
+            `The Penpot plugin tab appears to be suspended by the browser (no heartbeat for ` +
+                `${Math.round(heartbeatAge / 1000)}s). Please click/focus the Penpot tab to wake it, ` +
+                `then retry.`
+        );
+    }
 }
 
 /**
@@ -83,11 +118,21 @@ export class PluginBridge {
             }, KEEP_ALIVE_TIME);
 
             // register the client connection with both indexes
-            const connection: ClientConnection = { socket: ws, userToken, pingInterval };
+            const connection: ClientConnection = {
+                socket: ws,
+                userToken,
+                pingInterval,
+                lastHeartbeat: Date.now(),
+                frozen: false,
+            };
             this.connectedClients.set(ws, connection);
             if (userToken) {
-                // ensure only one connection per userToken
-                if (this.clientsByToken.has(userToken)) {
+                const existingConnection = this.clientsByToken.get(userToken);
+                if (existingConnection && this.canReplaceDuplicateConnection(existingConnection)) {
+                    this.logger.warn("Replacing stale duplicate connection for given user token");
+                    existingConnection.socket.close(1000, "Replaced by a newer plugin connection.");
+                    this.removeConnection(existingConnection.socket, true);
+                } else if (existingConnection) {
                     this.logger.warn("Duplicate connection for given user token; rejecting new connection");
                     this.removeConnection(ws);
                     ws.close(1008, "Duplicate connection for given user token; close previous connection first.");
@@ -111,8 +156,19 @@ export class PluginBridge {
             ws.on("message", (data: Buffer) => {
                 this.logger.debug("Received WebSocket message: %s", data.toString());
                 try {
-                    const response: PluginTaskResponse<any> = JSON.parse(data.toString());
-                    this.handlePluginTaskResponse(response);
+                    connection.lastHeartbeat = Date.now();
+
+                    const message = JSON.parse(data.toString());
+                    if (message?.type === "freeze") {
+                        connection.frozen = true;
+                        this.logger.info("Plugin tab reported it is being frozen by the browser");
+                        return;
+                    }
+                    connection.frozen = false;
+                    if (message?.type === "heartbeat") {
+                        return;
+                    }
+                    this.handlePluginTaskResponse(message as PluginTaskResponse<any>);
                 } catch (error) {
                     this.logger.error(error, "Failure while processing WebSocket message");
                 }
@@ -132,6 +188,17 @@ export class PluginBridge {
         this.logger.info("WebSocket mcpServer started on port %d", this.port);
     }
 
+    /** A newer plugin may take ownership only when the current owner cannot run tasks. */
+    private canReplaceDuplicateConnection(connection: ClientConnection): boolean {
+        if (connection.socket.readyState !== WebSocket.OPEN) {
+            return true;
+        }
+        if (connection.frozen) {
+            return true;
+        }
+        return Date.now() - connection.lastHeartbeat > HEARTBEAT_STALE_THRESHOLD_MS;
+    }
+
     /**
      * Removes a client connection and releases all resources associated with it.
      *
@@ -141,8 +208,9 @@ export class PluginBridge {
      * connection. Safe to call with a socket that is not (or no longer) registered.
      *
      * @param ws - The WebSocket whose connection state should be removed
+     * @param preserveTokenSubscription - Keep Redis routing in place while a replacement takes ownership
      */
-    private removeConnection(ws: WebSocket): void {
+    private removeConnection(ws: WebSocket, preserveTokenSubscription: boolean = false): void {
         const connection = this.connectedClients.get(ws);
         if (!connection) {
             return;
@@ -157,7 +225,7 @@ export class PluginBridge {
             } else {
                 this.clientsByToken.delete(connection.userToken);
 
-                if (this.redisBridge) {
+                if (this.redisBridge && !preserveTokenSubscription) {
                     this.redisBridge
                         .unsubscribeFromTasks(connection.userToken)
                         .catch((error) => this.logger.error(error, "Failed to unsubscribe from Redis task channel"));
@@ -342,6 +410,8 @@ export class PluginBridge {
                 // WebSocket is not open
                 throw new Error(`Plugin instance is disconnected. Task could not be sent.`);
             }
+
+            assertPluginResponsive(target, Date.now());
 
             // register the task for result correlation, then send over the socket
             this.pendingTasks.set(task.id, task);
